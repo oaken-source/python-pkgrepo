@@ -88,6 +88,7 @@ def update_pkgrepo():
     # update the pkgbuild repo
     subprocess.check_call(['git', 'reset', '--hard'], cwd=PKGDIR)
     subprocess.check_call(['git', 'pull'], cwd=PKGDIR)
+    subprocess.check_call(['git', 'submodule', 'update', '--init', '--recursive'], cwd=PKGDIR)
     # rebuild updated pkgbuilds
     for package in packages():
         if needs_rebuild(package):
