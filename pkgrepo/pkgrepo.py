@@ -74,7 +74,10 @@ def update_pkgbuild(package):
     # delete old builds
     delete_build(package)
     # build package
-    subprocess.check_call(['makepkg', '-d'], cwd=os.path.join(PKGDIR, package))
+    try:
+        subprocess.check_call(['makepkg', '-d'], cwd=os.path.join(PKGDIR, package))
+    except subprocess.CalledProcessError:
+        subprocess.check_call(['makepkg', '-rs', '--noconfirm'], cwd=os.path.join(PKGDIR, package))
     # install new package
     install_package(package)
 
