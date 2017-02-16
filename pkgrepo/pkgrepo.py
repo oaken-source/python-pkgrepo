@@ -86,6 +86,7 @@ def update_pkgrepo():
     print('attempting update of package repository')
 
     # update the pkgbuild repo
+    subprocess.check_call(['git', 'reset', '--hard'], cwd=PKGDIR)
     subprocess.check_call(['git', 'pull'], cwd=PKGDIR)
     # rebuild updated pkgbuilds
     for package in packages():
