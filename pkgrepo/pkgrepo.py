@@ -9,6 +9,7 @@ import os
 PKGDIR = '/opt/pkgrepo/pkgbuilds/'
 BUILDDIR = '/www/pkgrepo'
 REPO = '/www/pkgrepo/pkgrepo.db.tar.gz'
+CHROOTDIR = '/opt/pkgrepo/chroot/'
 
 
 def packages():
@@ -71,13 +72,17 @@ def update_pkgbuild(package):
     '''
     print('attempting update of package %s' % package)
 
+    # prepare chroot
+    if not os.path.exists(CHROOTDIR):
+        os.makedirs(CHROOTDIR)
+        subprocess.check_call(['mkarchroot', os.path.join(CHROOTDIR, 'root'), 'base-devel'])
+    subprocess.check_call(['arch-nspawn', os.path.join(CHROOTDIR, 'root'), 'pacman', '-Syu'])
+
     # delete old builds
     delete_build(package)
     # build package
-    try:
-        subprocess.check_call(['makepkg', '-d'], cwd=os.path.join(PKGDIR, package))
-    except subprocess.CalledProcessError:
-        subprocess.check_call(['makepkg', '-rs', '--noconfirm'], cwd=os.path.join(PKGDIR, package))
+    subprocess.check_call(['makechrootpkg', '-c', '-r', CHROOTDIR],
+                          cwd=os.path.join(PKGDIR, package))
     # install new package
     install_package(package)
 
