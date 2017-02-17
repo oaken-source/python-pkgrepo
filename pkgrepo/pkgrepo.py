@@ -63,10 +63,6 @@ def install_package(package):
 
     # move build to /www/pkgrepo
     os.rename(os.path.join(path, package), os.path.join(BUILDDIR, package))
-    # fix permissions
-    uid = os.getuid()
-    gid = grp.getgrnam("http").gr_gid
-    os.chown(os.path.join(BUILDDIR, package), uid, gid)
     # add package to repo
     subprocess.check_call(['repo-add', REPO, os.path.join(BUILDDIR, package)])
 
