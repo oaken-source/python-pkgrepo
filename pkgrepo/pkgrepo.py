@@ -58,8 +58,10 @@ def install_package(package):
     '''
     path = os.path.join(PKGDIR, package)
     for pkg in os.listdir(path):
-        if pkg.startswith(package) and pkg.endswith('.tar.xz'):
+        if pkg.startswith(package) and pkg.endswith('.pkg.tar.xz'):
             package = pkg
+
+    print('installing package %s' % package)
 
     # move build to /www/pkgrepo
     os.rename(os.path.join(path, package), os.path.join(BUILDDIR, package))
