@@ -8,15 +8,7 @@ from netaddr import IPNetwork, IPAddress
 from .pkgrepo import update_pkgrepo, update_pkgbuild
 
 
-def _create_app():
-    '''
-    when you create the app, also update the pkgrepo
-    '''
-    update_pkgrepo()
-    return Flask(__name__)
-
-
-app = _create_app()
+app = Flask(__name__)
 
 
 @app.route("/", methods=['POST'])
@@ -39,4 +31,13 @@ def webhook():
         update_pkgbuild(request.json['repository']['name'])
 
     # say ok and leave
+    return ('', 204)
+
+
+@app.route("/rebuild")
+def rebuild():
+    '''
+    trigger a rebuild
+    '''
+    update_pkgrepo()
     return ('', 204)
