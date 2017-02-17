@@ -3,6 +3,7 @@ actual package handling functions
 '''
 
 import subprocess
+import grp
 import os
 
 
@@ -99,7 +100,22 @@ def update_pkgrepo():
     subprocess.check_call(['git', 'reset', '--hard'], cwd=PKGDIR)
     subprocess.check_call(['git', 'pull'], cwd=PKGDIR)
     subprocess.check_call(['git', 'submodule', 'update', '--init', '--recursive'], cwd=PKGDIR)
-    # rebuild updated pkgbuilds
+
+    # collect updated pkgbuilds
+    tobebuilt = []
     for package in packages():
         if needs_rebuild(package):
-            update_pkgbuild(package)
+            tobebuilt.append(package)
+
+    # build packages
+    while tobebuilt:
+        retries = []
+        for package in tobebuilt:
+            try:
+                update_pkgbuild(package)
+            except subprocess.CalledProcessError:
+                print('postponing update')
+                retries.append(package)
+        if retries == tobebuilt:
+            raise Exception('can not resolve this.')
+        tobebuilt = retries
