@@ -75,13 +75,15 @@ def update_pkgbuild(package):
     # prepare chroot
     if not os.path.exists(CHROOTDIR):
         os.makedirs(CHROOTDIR)
-        subprocess.check_call(['mkarchroot', os.path.join(CHROOTDIR, 'root'), 'base-devel'])
-    subprocess.check_call(['arch-nspawn', os.path.join(CHROOTDIR, 'root'), 'pacman', '-Syu'])
+        subprocess.check_call(['fakechroot', 'mkarchroot',
+                              os.path.join(CHROOTDIR, 'root'), 'base-devel'])
+    subprocess.check_call(['fakechroot', 'arch-nspawn',
+                          os.path.join(CHROOTDIR, 'root'), 'pacman', '-Syu'])
 
     # delete old builds
     delete_build(package)
     # build package
-    subprocess.check_call(['makechrootpkg', '-c', '-r', CHROOTDIR],
+    subprocess.check_call(['fakechroot', 'makechrootpkg', '-c', '-r', CHROOTDIR],
                           cwd=os.path.join(PKGDIR, package))
     # install new package
     install_package(package)
