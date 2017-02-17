@@ -79,7 +79,10 @@ def update_pkgbuild(package):
 
     # prepare chroot
     subprocess.check_call(['sudo', 'arch-nspawn',
-        os.path.join(CHROOTDIR, 'root'), 'pacman', '-Syu'])
+            os.path.join(CHROOTDIR, 'root'), 'pacman', '-Syu'])
+
+    subprocess.check_call(['git', 'clean', '-df'],
+            cwd=os.path.join(PKGDIR, package))
 
     # delete old builds
     delete_build(package)
