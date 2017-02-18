@@ -10,6 +10,11 @@ import os
 from .pkgtools import ccall
 
 
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+
 PKGBUILDS = '/opt/pkgrepo/pkgbuilds/'
 CHROOT = '/opt/pkgrepo/chroot/'
 PACKAGES = '/www/pkgrepo/'
@@ -204,32 +209,17 @@ class Pkgbuild(object):
         '''
         self._cwd = os.path.join(PKGBUILDS, folder)
 
-        # clean the pkgbuild
-        ccall(['git', 'clean', '-fdx'], cwd=self.cwd)
-        ccall(['rm', '-rf', 'src'], cwd=self.cwd)
-        ccall(['git', 'checkout', '--', '.'], cwd=self.cwd)
-
-        # update the pkgver
-        ccall(['makepkg', '-do'], cwd=self.cwd)
-
         # parse the PKGBUILD
-        with open(os.path.join(PKGBUILDS, folder, 'PKGBUILD')) as file:
+        with open(os.path.join(self.cwd, 'PKGBUILD')) as file:
             data = file.read()
             pkgname = re.search(r'pkgname *=(.*)', data).groups()[0].strip()
-            pkgver = re.search(r'pkgver *=(.*)', data).groups()[0].strip()
-            pkgrel = re.search(r'pkgrel *=(.*)', data).groups()[0].strip()
             logging.debug(data)
-            logging.debug('PKGBUILD tokenized into pkgname: %s pkgver: %s pkgrel: %s',
-                          pkgname, pkgver, pkgrel)
+            logging.debug('PKGBUILD tokenized into pkgname: %s', pkgname)
 
         self._name = pkgname
-        self._version = '%s-%s' % (pkgver, pkgrel)
+        self._version = None
         self.package = None
 
-        # clean the pkgbuild again
-        ccall(['git', 'clean', '-fdx'], cwd=self.cwd)
-        ccall(['rm', '-rf', 'src'], cwd=self.cwd)
-        ccall(['git', 'checkout', '--', '.'], cwd=self.cwd)
 
     @property
     def name(self):
@@ -243,7 +233,36 @@ class Pkgbuild(object):
         '''
         the version of the package
         '''
+        if self._version is None:
+            self._get_version()
         return self._version
+
+    def _get_version(self):
+        '''
+        update the PKGBUILD and extract the version number
+        '''
+        # clean the pkgbuild
+        ccall(['git', 'clean', '-fdx'], cwd=self.cwd)
+        ccall(['rm', '-rf', 'src'], cwd=self.cwd)
+        ccall(['git', 'checkout', '--', '.'], cwd=self.cwd)
+
+        # update the pkgver
+        ccall(['makepkg', '-do'], cwd=self.cwd)
+
+        # parse the PKGBUILD
+        with open(os.path.join(self.cwd, 'PKGBUILD')) as file:
+            data = file.read()
+            pkgver = re.search(r'pkgver *=(.*)', data).groups()[0].strip()
+            pkgrel = re.search(r'pkgrel *=(.*)', data).groups()[0].strip()
+            logging.debug(data)
+            logging.debug('PKGBUILD tokenized into pkgver: %s pkgrel: %s', pkgver, pkgrel)
+
+        self._version = '%s-%s' % (pkgver, pkgrel)
+
+        # clean the pkgbuild again
+        ccall(['git', 'clean', '-fdx'], cwd=self.cwd)
+        ccall(['rm', '-rf', 'src'], cwd=self.cwd)
+        ccall(['git', 'checkout', '--', '.'], cwd=self.cwd)
 
     @property
     def cwd(self):
