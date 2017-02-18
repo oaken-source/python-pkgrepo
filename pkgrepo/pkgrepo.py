@@ -36,7 +36,8 @@ class Pkgrepo(object):
         '''
         # clean and pull the repository
         logging.info('updating package repository')
-        ccall(['git', 'reset', '--hard'], cwd=PKGBUILDS)
+        ccall(['git', 'checkout', '--', '.'], cwd=PKGBUILDS)
+        ccall(['git', 'clean', '-dfx'], cwd=PKGBUILDS)
         ccall(['git', 'pull'], cwd=PKGBUILDS)
         ccall(['git', 'submodule', 'update', '--init', '--recursive'], cwd=PKGBUILDS)
 
@@ -203,8 +204,18 @@ class Pkgbuild(object):
         '''
         self._cwd = os.path.join(PKGBUILDS, folder)
 
+        # clean the pkgbuild
+        ccall(['git', 'clean', '-fdx'], cwd=self.cwd)
+        ccall(['rm', '-rf', 'src'], cwd=self.cwd)
+        ccall(['git', 'checkout', '--', '.'], cwd=self.cwd)
+
         # update the pkgver
         ccall(['makepkg', '-do'], cwd=self.cwd)
+
+        # clean the pkgbuild
+        ccall(['git', 'clean', '-fdx'], cwd=self.cwd)
+        ccall(['rm', '-rf', 'src'], cwd=self.cwd)
+        ccall(['git', 'checkout', '--', '.'], cwd=self.cwd)
 
         # parse the PKGBUILD
         with open(os.path.join(PKGBUILDS, folder, 'PKGBUILD')) as file:
