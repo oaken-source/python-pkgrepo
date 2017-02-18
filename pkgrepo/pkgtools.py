@@ -10,6 +10,7 @@ def ccall(*args, **kwargs):
     '''
     subprocess.check_call wrapper (shorthand)
     '''
+    logging.debug('executing %s', args)
     kwargs['universal_newlines'] = True
     kwargs['stdout'] = subprocess.PIPE
     kwargs['stderr'] = subprocess.PIPE

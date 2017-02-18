@@ -114,10 +114,10 @@ class Pkgrepo(object):
                 pkgbuild = Pkgbuild(folder)
                 # figure out which package it belongs to
                 try:
-                    package = next(p for p in self._packages if p.name == pkgbuild.name)
+                    pkgbuild.package = next(p for p in self._packages if p.name == pkgbuild.name)
+                    logging.debug('%s has package: %s', pkgbuild.name, package)
                 except StopIteration:
-                    package = None
-                logging.debug('found a pkgbuild: %s for package: %s', pkgbuild, package)
+                    logging.warning('%s has no package', pkgbuild.name)
                 self._pkgbuilds.append(pkgbuild)
 
 
