@@ -3,120 +3,266 @@ actual package handling functions
 '''
 
 import subprocess
-import grp
+import logging
+import re
 import os
 
-
-PKGDIR = '/opt/pkgrepo/pkgbuilds/'
-BUILDDIR = '/www/pkgrepo'
-REPO = '/www/pkgrepo/pkgrepo.db.tar.gz'
-CHROOTDIR = '/opt/pkgrepo/chroot/'
+from .pkgtools import ccall
 
 
-def packages():
+PKGBUILDS = '/opt/pkgrepo/pkgbuilds/'
+CHROOT = '/opt/pkgrepo/chroot/'
+PACKAGES = '/www/pkgrepo/'
+PKGREPO = '%s/pkgrepo.db.tar.gz' % PACKAGES
+
+
+class Pkgrepo(object):
     '''
-    yield packages
+    this class represents the package repo
     '''
-    for pkg in os.listdir(PKGDIR):
-        if os.path.isdir(os.path.join(PKGDIR, pkg)) and not pkg.startswith('.'):
-            yield pkg
+    def __init__(self):
+        '''
+        constructor - collect infos about packages
+        '''
+        self._packages = []
+        self._pkgbuilds = []
+
+        self._collect_packages()
+        self._collect_pkgbuilds()
+
+    def update(self):
+        '''
+        update the entire package repo
+        '''
+        # clean and pull the repository
+        logging.info('updating package repository')
+        ccall(['git', 'reset', '--hard'], cwd=PKGBUILDS)
+        ccall(['git', 'pull'], cwd=PKGBUILDS)
+        ccall(['git', 'submodule', 'update', '--init', '--recursive'], cwd=PKGBUILDS)
+
+        # regenerate information on pkgbuilds
+        self._collect_pkgbuilds()
+
+        # delete packages removed from pkgrepo
+        logging.info('scanning for deleted packages')
+        for package in self._packages:
+            if package.pkgbuild is None:
+                logging.info('package %s has no PKGBUILD - removing...', package)
+                package.uninstall()
+
+        # find packages where package is older than PKGBUILD, or does not exist
+        logging.info('scanning for updated packages')
+        rebuilds = []
+        for pkgbuild in self._pkgbuilds:
+            if pkgbuild.package is None or pkgbuild.package.version != pkgbuild.version:
+                logging.info('%s needs to be rebuilt - queueing...', pkgbuild.name)
+                rebuilds.append(pkgbuild)
+
+        # attempt to rebuild these packages
+        while rebuilds:
+            retries = []
+            for pkgbuild in rebuilds:
+                try:
+                    logging.info('attempting rebuild of %s...', pkgbuild.name)
+                    pkgbuild.makepkg()
+                    logging.info('finished rebuild of %s...', pkgbuild.name)
+                except subprocess.CalledProcessError:
+                    logging.warning('rebuild of %s has failed. requeueing...', pkgbuild.name)
+                    retries.append(pkgbuild)
+            if retries == rebuilds:
+                logging.error('unable to resolve this')
+                raise Exception('unable to resolve this')
+
+    def build(self, packagename):
+        '''
+        rebuild the given package by name
+        '''
+        # find the queried package
+        pkgbuild = next(p for p in self._pkgbuilds if p.name == packagename)
+        pkgbuild.makepkg()
+
+    def _collect_packages(self):
+        '''
+        figure out what built packages there are
+        '''
+        # clear packages list
+        self._packages.clear()
+
+        # collect the installed packages
+        for file in os.listdir(PACKAGES):
+            if file.endswith('.pkg.tar.gz'):
+                package = Package(file)
+                logging.debug('found a package: %s', package)
+                self._packages.append(package)
+
+    def _collect_pkgbuilds(self):
+        '''
+        figure out what PKGBUILDs there are
+        '''
+        # unlink all packages from pkgbuilds
+        for package in self._packages:
+            package.pkgbuild = None
+
+        # clear pkgbuild list
+        self._pkgbuilds.clear()
+
+        # collect pkgbuilds
+        for folder in os.listdir(PKGBUILDS):
+            if os.path.isdir(os.path.join(PKGBUILDS, folder)) and not folder.startswith('.'):
+                pkgbuild = Pkgbuild(folder)
+                # figure out which package it belongs to
+                try:
+                    package = next(p for p in self._packages if p.name == pkgbuild.name)
+                except StopIteration:
+                    package = None
+                logging.debug('found a pkgbuild: %s for package: %s', pkgbuild, package)
+                self._pkgbuilds.append(pkgbuild)
 
 
-def builds():
+class Package(object):
     '''
-    yield built packages
+    a built package
     '''
-    for pkg in os.listdir(BUILDDIR):
-        if pkg.endswith('.tar.xz'):
-            yield pkg
+    def __init__(self, file):
+        '''
+        constructor - parse the filename and extract name and version
+        '''
+        self._file = file
+        match = re.match(r'^(.*)-([^-]*-[0-9]*)-[^-]*\.pkg\.tar\.xz$', file).groups()
+
+        self._name = match[0]
+        self._version = match[1]
+        logging.debug('tokenized %s to name: %s version: %s', file, self._name, self._version)
+
+        self.pkgbuild = None
+
+    @property
+    def name(self):
+        '''
+        the package name
+        '''
+        return self._name
+
+    @property
+    def version(self):
+        '''
+        the package version
+        '''
+        return self._version
+
+    def install(self, pkgbuilddir):
+        '''
+        install the package from the pkgbuild directory
+        '''
+        logging.info('adding %s to pkgrepo', self)
+        os.rename(os.path.join(pkgbuilddir, self._file), os.path.join(PACKAGES, self._file))
+        ccall(['repo-add', PKGREPO, os.path.join(PACKAGES, self._file)])
+
+    def uninstall(self):
+        '''
+        uninstall the package
+        '''
+        logging.info('removing %s from pkgrepo', self)
+        ccall(['repo-remove', PKGREPO, self._name])
+        os.unlink(os.path.join(PACKAGES, self._file))
+
+    @classmethod
+    def make(cls, pkgbuild):
+        '''
+        produce a new package from the given pkgbuild
+        '''
+        # build the package in the chroot
+        ccall(['sudo', 'makechrootpkg', '-c', '-r', CHROOT], cwd=pkgbuild.cwd)
+
+        # produce the package object
+        for file in os.listdir(pkgbuild.cwd):
+            if file.endswith('.pkg.tar.xz'):
+                package = Package(file)
+                package.pkgbuild = pkgbuild
+                return pkgbuild
+
+        # there was no package? how peculiar.
+        logging.error('found no package in %s', pkgbuild.cwd)
+        raise Exception('found no package in %s' % pkgbuild.cwd)
+
+    def __repr__(self):
+        '''
+        a string representation of the package
+        '''
+        return '%s-%s' % (self.name, self.version)
 
 
-def needs_rebuild(package):
+class Pkgbuild(object):
     '''
-    figure out if a package is out of date
+    a PKGBUILD
     '''
-    for pkg in builds():
-        if pkg.startswith(package):
-            mtime_pkgbuild = os.path.getmtime(os.path.join(PKGDIR, package, 'PKGBUILD'))
-            mtime_package = os.path.getmtime(os.path.join(BUILDDIR, pkg))
-            return mtime_package < mtime_pkgbuild
-    return True
+    def __init__(self, folder):
+        '''
+        constructor - parse package name and version from the PKGBUILD
+        '''
+        self._cwd = os.path.join(PKGBUILDS, folder)
 
+        # update the pkgver
+        ccall(['makepkg', '-do'], cwd=self.cwd)
 
-def delete_build(package):
-    '''
-    remove builds of a package
-    '''
-    for pkg in builds():
-        if pkg.startswith(package):
-            os.remove(os.path.join(BUILDDIR, pkg))
+        # parse the PKGBUILD
+        with open(os.path.join(PKGBUILDS, folder, 'PKGBUILD')) as file:
+            data = file.read()
+            pkgname = re.match(r'pkgname *=(.*)', data).groups()[0].strip()
+            pkgver = re.match(r'pkgver *=(.*)', data).groups()[0].strip()
+            pkgrel = re.match(r'pkgrel *=(.*)', data).groups()[0].strip()
+            logging.debug(data)
+            logging.debug('PKGBUILD tokenized into pkgname: %s pkgver: %s pkgrel: %s',
+                          pkgname, pkgver, pkgrel)
 
+        self._name = pkgname
+        self._version = '%s-%s' % (pkgver, pkgrel)
 
-def install_package(package):
-    '''
-    build and install a package
-    '''
-    path = os.path.join(PKGDIR, package)
-    for pkg in os.listdir(path):
-        if pkg.startswith(package) and pkg.endswith('.pkg.tar.xz'):
-            package = pkg
+        self.package = None
 
-    print('installing package %s' % package)
+    @property
+    def name(self):
+        '''
+        the name of the package
+        '''
+        return self._name
 
-    # move build to /www/pkgrepo
-    os.rename(os.path.join(path, package), os.path.join(BUILDDIR, package))
-    # add package to repo
-    subprocess.check_call(['repo-add', REPO, os.path.join(BUILDDIR, package)])
+    @property
+    def version(self):
+        '''
+        the version of the package
+        '''
+        return self._version
 
+    @property
+    def cwd(self):
+        '''
+        the directory containing the pkgbuild
+        '''
+        return self._cwd
 
-def update_pkgbuild(package):
-    '''
-    update a single package
-    '''
-    print('attempting update of package %s' % package)
+    def makepkg(self):
+        '''
+        rebuild the given package
+        '''
+        oldpackage = self.package
 
-    # prepare chroot
-    subprocess.check_call(['sudo', 'arch-nspawn',
-            os.path.join(CHROOTDIR, 'root'), 'pacman', '-Syu'])
+        # update the chroot
+        ccall(['sudo', 'arch-nspawn', os.path.join(CHROOT, 'root'), 'pacman', '-Syu'])
+        # clean the package directory
+        ccall(['git', 'clean', '-df'], cwd=self.cwd)
 
-    subprocess.check_call(['git', 'clean', '-df'],
-            cwd=os.path.join(PKGDIR, package))
+        # buildfind the new package
+        logging.info('starting build of %s', self)
+        self.package = Package.make(self)
+        logging.info('new package has been built as %s', self.package)
 
-    # delete old builds
-    delete_build(package)
-    # build package
-    subprocess.check_call(['sudo', 'makechrootpkg', '-c', '-r', CHROOTDIR],
-            cwd=os.path.join(PKGDIR, package))
-    # install new package
-    install_package(package)
+        # install it
+        oldpackage.uninstall()
+        self.package.install(self.cwd)
 
-
-def update_pkgrepo():
-    '''
-    update the entire package repo
-    '''
-    print('attempting update of package repository')
-
-    # update the pkgbuild repo
-    subprocess.check_call(['git', 'reset', '--hard'], cwd=PKGDIR)
-    subprocess.check_call(['git', 'pull'], cwd=PKGDIR)
-    subprocess.check_call(['git', 'submodule', 'update', '--init', '--recursive'], cwd=PKGDIR)
-
-    # collect updated pkgbuilds
-    tobebuilt = []
-    for package in packages():
-        if needs_rebuild(package):
-            tobebuilt.append(package)
-
-    # build packages
-    while tobebuilt:
-        retries = []
-        for package in tobebuilt:
-            try:
-                update_pkgbuild(package)
-            except subprocess.CalledProcessError:
-                print('postponing update')
-                retries.append(package)
-        if retries == tobebuilt:
-            raise Exception('can not resolve this.')
-        tobebuilt = retries
+    def __repr__(self):
+        '''
+        a string representation of the pkgbuild
+        '''
+        return '%s-%s' % (self.name, self.version)

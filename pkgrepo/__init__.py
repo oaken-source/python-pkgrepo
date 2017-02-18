@@ -2,4 +2,4 @@
 make the app module global
 '''
 
-from .app import app
+from .app import APPLICATION as app

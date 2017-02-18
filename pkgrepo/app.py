@@ -2,42 +2,58 @@
 The Flask app
 '''
 
+import logging
+import netaddr
 from flask import Flask, request, abort
-from netaddr import IPNetwork, IPAddress
 
-from .pkgrepo import update_pkgrepo, update_pkgbuild
-
-
-app = Flask(__name__)
+from .pkgrepo import Pkgrepo
 
 
-@app.route("/", methods=['POST'])
-def webhook():
+GITHUB = netaddr.IPNetwork('192.30.252.0/22')
+APPLICATION = Flask(__name__)
+
+
+@APPLICATION.route("/", methods=['POST'])
+def webhook_push():
     '''
     respond to github webhooks
     '''
+    logging.info('received a push notification!')
+    logging.debug(request.json)
+
     # check for valid origin (github ips)
-    if IPAddress(request.remote_addr) not in IPNetwork('192.30.252.0/22'):
+    if netaddr.IPAddress(request.remote_addr) not in GITHUB:
+        logging.warning('request from unauthorized IP: %s', request.remote_address)
+        logging.warning('aborting...')
         abort(403)
 
-    # log the request
-    print('received a request!')
-    print(request.json)
-
     # dispatch request
-    if request.json['repository']['name'] == 'pkgbuilds':
-        update_pkgrepo()
+    target = request.json['repository']['name']
+    logging.info('requested rebuild of %s', target)
+
+    pkgrepo = Pkgrepo()
+
+    if target == 'pkgbuilds':
+        pkgrepo.update()
     else:
-        update_pkgbuild(request.json['repository']['name'])
+        pkgrepo.build(target)
 
     # say ok and leave
+    logging.info('request finished!')
     return ('', 204)
 
 
-@app.route("/rebuild")
-def rebuild():
+@APPLICATION.route("/rebuild/")
+def webhook_rebuild():
     '''
-    trigger a rebuild
+    trigger a full rebuild
     '''
-    update_pkgrepo()
+    logging.info('received a rebuild request!')
+    logging.debug(request)
+
+    pkgrepo = Pkgrepo()
+    pkgrepo.update()
+
+    # say ok and leave
+    logging.info('request finished!')
     return ('', 204)
