@@ -41,7 +41,7 @@ def webhook_push():
     if target == 'pkgbuilds':
         pkgrepo.update()
     else:
-        pkgrepo.build(target)
+        pkgrepo.build('%s-git' % target)
 
     # say ok and leave
     logging.info('request finished!')
