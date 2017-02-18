@@ -212,11 +212,6 @@ class Pkgbuild(object):
         # update the pkgver
         ccall(['makepkg', '-do'], cwd=self.cwd)
 
-        # clean the pkgbuild
-        ccall(['git', 'clean', '-fdx'], cwd=self.cwd)
-        ccall(['rm', '-rf', 'src'], cwd=self.cwd)
-        ccall(['git', 'checkout', '--', '.'], cwd=self.cwd)
-
         # parse the PKGBUILD
         with open(os.path.join(PKGBUILDS, folder, 'PKGBUILD')) as file:
             data = file.read()
@@ -229,8 +224,12 @@ class Pkgbuild(object):
 
         self._name = pkgname
         self._version = '%s-%s' % (pkgver, pkgrel)
-
         self.package = None
+
+        # clean the pkgbuild again
+        ccall(['git', 'clean', '-fdx'], cwd=self.cwd)
+        ccall(['rm', '-rf', 'src'], cwd=self.cwd)
+        ccall(['git', 'checkout', '--', '.'], cwd=self.cwd)
 
     @property
     def name(self):
