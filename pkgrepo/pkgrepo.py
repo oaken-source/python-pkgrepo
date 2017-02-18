@@ -13,7 +13,7 @@ from .pkgtools import ccall
 PKGBUILDS = '/opt/pkgrepo/pkgbuilds/'
 CHROOT = '/opt/pkgrepo/chroot/'
 PACKAGES = '/www/pkgrepo/'
-PKGREPO = '%s/pkgrepo.db.tar.gz' % PACKAGES
+PKGREPO = os.path.join(PACKAGES, 'pkgrepo.db.tar.gz')
 
 
 class Pkgrepo(object):
@@ -115,6 +115,7 @@ class Pkgrepo(object):
                 # figure out which package it belongs to
                 try:
                     pkgbuild.package = next(p for p in self._packages if p.name == pkgbuild.name)
+                    pkgbuild.package.pkgbuild = pkgbuild
                     logging.debug('%s has package: %s', pkgbuild.name, pkgbuild.package)
                 except StopIteration:
                     logging.warning('%s has no package', pkgbuild.name)
@@ -166,7 +167,10 @@ class Package(object):
         '''
         logging.info('removing %s from pkgrepo', self)
         ccall(['repo-remove', PKGREPO, self._name])
-        os.unlink(os.path.join(PACKAGES, self._file))
+        try:
+            os.unlink(os.path.join(PACKAGES, self._file))
+        except FileNotFoundError:
+            pass
 
     @classmethod
     def make(cls, pkgbuild):
@@ -237,8 +241,8 @@ class Pkgbuild(object):
         update the PKGBUILD and extract the version number
         '''
         # clean the pkgbuild
-        ccall(['git', 'clean', '-fdx'], cwd=self.cwd)
         ccall(['rm', '-rf', 'src'], cwd=self.cwd)
+        ccall(['git', 'clean', '-fdx'], cwd=self.cwd)
         ccall(['git', 'checkout', '--', '.'], cwd=self.cwd)
 
         # update the pkgver
@@ -255,8 +259,8 @@ class Pkgbuild(object):
         self._version = '%s-%s' % (pkgver, pkgrel)
 
         # clean the pkgbuild again
-        ccall(['git', 'clean', '-fdx'], cwd=self.cwd)
         ccall(['rm', '-rf', 'src'], cwd=self.cwd)
+        ccall(['git', 'clean', '-fdx'], cwd=self.cwd)
         ccall(['git', 'checkout', '--', '.'], cwd=self.cwd)
 
     @property
