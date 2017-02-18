@@ -28,7 +28,6 @@ class Pkgrepo(object):
         self._pkgbuilds = []
 
         self._collect_packages()
-        self._collect_pkgbuilds()
 
     def update(self):
         '''
@@ -71,8 +70,8 @@ class Pkgrepo(object):
                     logging.warning('rebuild of %s has failed. requeueing...', pkgbuild.name)
                     retries.append(pkgbuild)
             if retries == rebuilds:
-                logging.error('unable to resolve this')
-                raise Exception('unable to resolve this')
+                logging.error('unable to resolve this: %s', retries)
+                raise Exception('unable to resolve this: %s', retries)
             rebuilds = retries
 
     def build(self, packagename):
@@ -80,6 +79,7 @@ class Pkgrepo(object):
         rebuild the given package by name
         '''
         # find the queried package
+        self._collect_pkgbuilds()
         pkgbuild = next(p for p in self._pkgbuilds if p.name == packagename)
         pkgbuild.makepkg()
 
