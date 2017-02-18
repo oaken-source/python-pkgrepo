@@ -279,10 +279,10 @@ class Pkgbuild(object):
         # update the chroot
         ccall(['sudo', 'arch-nspawn', os.path.join(CHROOT, 'root'), 'pacman', '-Syu'])
         # clean the package directory
-        ccall(['git', 'clean', '-df'], cwd=self.cwd)
+        ccall(['git', 'clean', '-fdx'], cwd=self.cwd)
 
         # buildfind the new package
-        logging.info('starting build of %s', self)
+        logging.info('starting build of %s', self.name)
         self.package = Package.make(self)
         logging.info('new package has been built as %s', self.package)
 
