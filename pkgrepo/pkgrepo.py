@@ -72,6 +72,7 @@ class Pkgrepo(object):
             if retries == rebuilds:
                 logging.error('unable to resolve this')
                 raise Exception('unable to resolve this')
+            rebuilds = retries
 
     def build(self, packagename):
         '''
@@ -179,7 +180,7 @@ class Package(object):
             if file.endswith('.pkg.tar.xz'):
                 package = Package(file)
                 package.pkgbuild = pkgbuild
-                return pkgbuild
+                return package
 
         # there was no package? how peculiar.
         logging.error('found no package in %s', pkgbuild.cwd)
@@ -208,9 +209,9 @@ class Pkgbuild(object):
         # parse the PKGBUILD
         with open(os.path.join(PKGBUILDS, folder, 'PKGBUILD')) as file:
             data = file.read()
-            pkgname = re.match(r'pkgname *=(.*)', data).groups()[0].strip()
-            pkgver = re.match(r'pkgver *=(.*)', data).groups()[0].strip()
-            pkgrel = re.match(r'pkgrel *=(.*)', data).groups()[0].strip()
+            pkgname = re.search(r'pkgname *=(.*)', data).groups()[0].strip()
+            pkgver = re.search(r'pkgver *=(.*)', data).groups()[0].strip()
+            pkgrel = re.search(r'pkgrel *=(.*)', data).groups()[0].strip()
             logging.debug(data)
             logging.debug('PKGBUILD tokenized into pkgname: %s pkgver: %s pkgrel: %s',
                           pkgname, pkgver, pkgrel)
@@ -258,7 +259,8 @@ class Pkgbuild(object):
         logging.info('new package has been built as %s', self.package)
 
         # install it
-        oldpackage.uninstall()
+        if oldpackage is not None:
+            oldpackage.uninstall()
         self.package.install(self.cwd)
 
     def __repr__(self):

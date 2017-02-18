@@ -9,6 +9,11 @@ from flask import Flask, request, abort
 from .pkgrepo import Pkgrepo
 
 
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+
 GITHUB = netaddr.IPNetwork('192.30.252.0/22')
 APPLICATION = Flask(__name__)
 
