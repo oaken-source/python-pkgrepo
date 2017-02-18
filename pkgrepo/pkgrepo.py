@@ -10,11 +10,6 @@ import os
 from .pkgtools import ccall
 
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
-
 PKGBUILDS = '/opt/pkgrepo/pkgbuilds/'
 CHROOT = '/opt/pkgrepo/chroot/'
 PACKAGES = '/www/pkgrepo/'
@@ -97,7 +92,7 @@ class Pkgrepo(object):
 
         # collect the installed packages
         for file in os.listdir(PACKAGES):
-            if file.endswith('.pkg.tar.gz'):
+            if file.endswith('.pkg.tar.xz'):
                 package = Package(file)
                 logging.debug('found a package: %s', package)
                 self._packages.append(package)
