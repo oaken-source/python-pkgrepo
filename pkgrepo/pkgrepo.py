@@ -277,7 +277,8 @@ class Pkgbuild(object):
         oldpackage = self.package
 
         # update the chroot
-        ccall(['sudo', 'arch-nspawn', os.path.join(CHROOT, 'root'), 'pacman', '-Syu'])
+        ccall(['sudo', 'arch-nspawn', os.path.join(CHROOT, 'root'),
+            'pacman', '-Syu', '--noconfirm'])
         # clean the package directory
         ccall(['git', 'clean', '-fdx'], cwd=self.cwd)
 
